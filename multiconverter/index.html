@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Unit Converter</title>
+    <!-- PWA Linkages: Using relative path to manifest.json --><link rel="manifest" href="manifest.json">
+    <script>
+        // Register the Service Worker for offline functionality
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                // FIXED: Using relative path 'service-worker.js' for robust registration
+                navigator.serviceWorker.register('service-worker.js')
+                    .then(reg => console.log('Service Worker registered:', reg.scope))
+                    .catch(err => console.error('Service Worker registration failed:', err));
+            });
+        }
+    </script>
+
+    <!-- Google Fonts: Inter for clean text, Poppins for titles --><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Load Tailwind CSS for modern styling --><script src="https://cdn.tailwindcss.com"></script>
+    <!-- Configure Tailwind for the Dual Theme Palette --><script>
+        // Define color variables for both themes using CSS variables
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        // These Tailwind utilities will map to the CSS variables defined below
+                        'primary-accent': 'var(--color-primary-accent)',
+                        'primary-hover': 'var(--color-primary-hover)',
+                        'secondary-accent': 'var(--color-secondary-accent)',
+                        'card-bg': 'var(--color-card-bg)',
+                        'text-main': 'var(--color-text-main)',
+                        'text-secondary': 'var(--color-text-secondary)',
+                        'border-light': 'var(--color-border-light)',
+                        'input-bg': 'var(--color-input-bg)',
+                        'result-bg': 'var(--color-result-bg)',
+                        'result-text': 'var(--color-result-text)',
+                        'frame-bg': 'var(--color-frame-bg)', // New color for background frames/groups
+                        'frame-border': 'var(--color-frame-border)', // New color for frame borders
+                        'frame-text': 'var(--color-frame-text)', // New color for text inside frames
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        heading: ['Poppins', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'custom-light': '0 4px 15px rgba(0, 0, 0, 0.05)',
+                        'custom-medium': '0 10px 30px rgba(0, 0, 0, 0.08)',
+                        'accent-glow': '0 0 0 4px rgba(99, 102, 241, 0.3)', 
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* --- CSS Variable Definitions (Default: Light Theme) --- */
+        :root {
+            /* Background Colors */
+            --color-bg-start: #e0f2fe; 
+            --color-bg-end: #ede9fe;   
+            --color-card-bg: #ffffff;
+            --color-input-bg: #f3f4f6;
+            
+            /* Frame Colors (Matching Primary Accent) */
+            --color-primary-accent: #6366f1; /* Indigo 500 */
+            --color-primary-hover: #4f46e5;
+            --color-frame-bg: var(--color-primary-accent); /* Frame BG matches Button BG */
+            --color-frame-border: var(--color-primary-hover);
+            --color-frame-text: #f3f4f6; /* Light text for dark frame BG */
+            
+            /* Text Colors */
+            --color-text-main: #374151; 
+            --color-text-secondary: #6b7280; 
+            --color-border-light: #e5e7eb;
+            
+            /* Result Colors */
+            --color-secondary-accent: #2dd4bf;
+            --color-result-bg: #d1fae5;
+            --color-result-text: #065f46;
+        }
+
+        /* --- DARK MODE Overrides --- */
+        [data-theme="dark"] {
+            /* Background Colors */
+            --color-bg-start: #1f2937; 
+            --color-bg-end: #1f2937;   
+            --color-card-bg: #374151;
+            --color-input-bg: #4b5563;
+            
+            /* Frame Colors (Matching Primary Accent) */
+            --color-primary-accent: #8183f8; /* Slightly lighter indigo for contrast on dark */
+            --color-primary-hover: #6366f1;
+            --color-frame-bg: var(--color-primary-accent); /* Frame BG matches Button BG */
+            --color-frame-border: var(--color-primary-hover);
+            --color-frame-text: #f3f4f6; /* Light text for dark frame BG */
+            
+            /* Text Colors */
+            --color-text-main: #f3f4f6; 
+            --color-text-secondary: #9ca3af;
+            --color-border-light: #4b5563;
+            
+            /* Result Colors */
+            --color-result-bg: #064e3b;
+            --color-result-text: #a7f3d0;
+        }
+
+        /* --- General Base Styles --- */
+        body {
+            /* Apply gradient using CSS variables for dynamic switching */
+            background-image: linear-gradient(to right bottom, var(--color-bg-start), var(--color-bg-end));
+            font-family: var(--tw-font-sans);
+            color: var(--color-text-main); 
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            transition: background-color 0.3s; /* Smooth theme transition */
+        }
+        .converter-card {
+            box-shadow: var(--tw-shadow-custom-medium);
+            /* Increased border strength for better framing */
+            border: 2px solid var(--color-frame-border); 
+            background-color: var(--color-card-bg);
+            color: var(--color-text-main);
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+        .input-field, .select-field {
+            border: 1px solid var(--color-border-light);
+            background-color: var(--color-input-bg);
+            transition: border-color 0.2s, box-shadow 0.2s, background-color 0.3s;
+            color: var(--color-text-main);
+        }
+        /* Specific dark mode style for select dropdown text color */
+        [data-theme="dark"] .select-field {
+            color: var(--color-text-main);
+        }
+        .input-field:focus, .select-field:focus {
+            outline: none;
+            /* Use ring for focus effect, which is a better frame */
+            border-color: transparent; 
+            box-shadow: 0 0 0 3px var(--color-primary-accent), 0 0; 
+        }
+        .result-output {
+            background-color: var(--color-result-bg);
+            border: 1px solid var(--color-result-text); 
+            color: var(--color-result-text);
+            font-weight: 700;
+            transition: background-color 0.3s;
+        }
+        /* Button & Icon styles */
+        .convert-button svg { color: white; }
+        .theme-toggle-button { transition: color 0.3s, transform 0.2s; }
+
+        /* Custom style for the copy button overlay */
+        .copy-button-container {
+            padding-right: 3rem !important; 
+        }
+        .copy-btn {
+            background-color: var(--color-primary-accent);
+            color: white;
+            transition: background-color 0.2s;
+        }
+        .copy-btn:hover {
+            background-color: var(--color-primary-hover);
+        }
+
+        /* New: Styling for the distinct frames/groups */
+        .conversion-group {
+            background-color: var(--color-frame-bg); /* Now uses Primary Accent Color */
+            border: 1px solid var(--color-frame-border);
+            color: var(--color-frame-text); /* Ensures label text is light/white */
+            padding: 1rem;
+            border-radius: 0.75rem; /* rounded-xl equivalent */
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+        /* Ensure labels inside the colored frame inherit the white text color */
+        .conversion-group label {
+            color: var(--color-frame-text);
+        }
+
+        /* Responsive adjustments for smaller screens */
+        @media (max-width: 640px) {
+            .converter-card { padding: 1.5rem; }
+            .text-3xl { font-size: 2rem; }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center">
+
+    <div id="app" class="converter-card w-full max-w-lg p-6 md:p-10 rounded-2xl">
+        
+        <div class="flex justify-between items-start mb-6">
+            <!-- Left Side: Title and Icon -->
+            <div class="flex items-center">
+                <!-- Simple SVG icon for visual appeal --><svg class="w-8 h-8 md:w-10 md:h-10 text-primary-accent mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                </svg>
+                <h1 class="text-3xl font-heading font-bold text-primary-accent">
+                    Universal Converter
+                </h1>
+            </div>
+            
+            <!-- Right Side: Date and Theme Toggle -->
+            <div class="flex flex-col items-end">
+                <span id="current-date" class="text-xs font-medium text-text-secondary mb-2"></span>
+                <button id="theme-toggle" onclick="toggleTheme()" class="theme-toggle-button p-2 rounded-full text-text-main hover:text-primary-accent">
+                    <!-- Icon will be set dynamically by JavaScript -->
+                    <svg id="theme-icon" class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Default icon path (Sun for light theme) -->
+                        <path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.75 7.75a.75.75 0 01.53-.22l1.5-1.5a.75.75 0 111.06 1.06l-1.5 1.5a.75.75 0 01-1.06-1.06zM12 18a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V18a.75.75 0 01.75-.75zM4.97 4.97a.75.75 0 011.06 0l1.5 1.5a.75.75 0 11-1.06 1.06l-1.5-1.5a.75.75 0 010-1.06zM2.25 12a.75.75 0 01.75-.75h2.25a.75.75 0 010 1.5H3a.75.75 0 01-.75-.75zM17.69 17.69a.75.75 0 011.06 0l1.5 1.5a.75.75 0 11-1.06 1.06l-1.5-1.5a.75.75 0 010-1.06zM3 12a9 9 0 1018 0 9 9 0 00-18 0z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        
+        <p class="text-center text-text-secondary mb-8 font-inter text-md">
+            Convert between common units: Length, Mass, Volume, Area, Speed, Digital Storage, Time, and Temperature.
+        </p>
+
+        <!-- Category Selection Frame --><div class="mb-6 conversion-group">
+            <!-- Removed 'text-text-main' from label to inherit light text from frame -->
+            <label for="category-select" class="block text-sm font-medium mb-2">Conversion Category</label>
+            <select id="category-select" onchange="updateUnits()" class="select-field w-full p-3 rounded-lg"></select>
+        </div>
+
+        <!-- Conversion Interface -->
+        <div class="space-y-6">
+            
+            <!-- From Unit Input Frame -->
+            <div class="conversion-group">
+                <!-- Removed 'text-text-main' from label to inherit light text from frame -->
+                <label for="from-value" class="block text-sm font-medium mb-2">Input Value</label>
+                <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+                    <input type="number" id="from-value" value="1" oninput="performConversion()" 
+                           class="input-field flex-grow p-3 rounded-lg text-lg" 
+                           placeholder="Enter value" min="0" step="any">
+                    <select id="from-unit-select" onchange="performConversion()" 
+                            class="select-field w-full sm:w-2/5 p-3 rounded-lg"></select>
+                </div>
+            </div>
+
+            <!-- Conversion Button Frame (Center button remains simple for action focus) -->
+            <div class="text-center">
+                <button onclick="performConversion()" 
+                    class="convert-button w-full bg-primary-accent text-white font-semibold py-3 rounded-lg 
+                           hover:bg-primary-hover transition duration-200 transform hover:scale-[1.01] 
+                           shadow-custom-light flex items-center justify-center">
+                    <svg class="w-5 h-5 inline-block mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m12 0l4 4m-4-4l-4 4"></path></svg>
+                    Convert Now
+                </button>
+            </div>
+
+            <!-- To Unit Output Frame -->
+            <div class="conversion-group">
+                <!-- Removed 'text-text-main' from label to inherit light text from frame -->
+                <label for="to-value" class="block text-sm font-medium mb-2">Converted Result</label>
+                <div class="flex flex-col space-y-3 sm:space-y-0 sm:flex-row sm:space-x-3">
+                    
+                    <!-- Input + Copy Button Group -->
+                    <div class="flex flex-grow relative">
+                        <!-- Added 'copy-button-container' class to ensure input has enough padding on the right -->
+                        <input type="text" id="to-value" readonly 
+                            class="input-field result-output w-full p-3 rounded-l-lg text-lg copy-button-container" 
+                            value="3.28084" placeholder="Result">
+                        
+                        <!-- Copy Button (Absolutely positioned on the right) -->
+                        <button onclick="copyResult()" id="copy-btn"
+                                class="copy-btn absolute right-0 top-0 h-full p-3 rounded-r-lg 
+                                       shadow-custom-light flex items-center justify-center">
+                            <svg id="copy-icon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <!-- Copy Icon -->
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-2M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5h8m-1 7l-2 2m0 0l-2-2m2 2v6"></path>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <select id="to-unit-select" onchange="performConversion()" 
+                            class="select-field w-full sm:w-2/5 p-3 rounded-lg"></select>
+                </div>
+            </div>
+        </div>
+        
+        <p id="error-message" class="mt-4 text-red-600 font-medium text-center hidden">
+            Please enter a valid number.
+        </p>
+
+    </div>
+
+    <script>
+        // --- Conversion Data Structure ---
+        // Factors are defined in terms of a Base Unit for the category (Base Factor = 1).
+        const CONVERSION_FACTORS = {
+            Length: {
+                base: 'meter',
+                units: {
+                    'meter (m)': 1,
+                    'kilometer (km)': 1000,
+                    'mile (mi)': 1609.34,
+                    'yard (yd)': 0.9144,
+                    'foot (ft)': 0.3048,
+                    'inch (in)': 0.0254,
+                    'centimeter (cm)': 0.01,
+                }
+            },
+            Mass: {
+                base: 'kilogram',
+                units: {
+                    'kilogram (kg)': 1,
+                    'gram (g)': 0.001,
+                    'milligram (mg)': 0.000001,
+                    'pound (lb)': 0.453592,
+                    'ounce (oz)': 0.0283495,
+                    'metric ton (t)': 1000,
+                }
+            },
+            Volume: {
+                base: 'liter',
+                units: {
+                    'liter (L)': 1,
+                    'milliliter (ml)': 0.001,
+                    'cubic meter (m³)': 1000,
+                    'gallon (US gal)': 3.78541,
+                    'quart (US qt)': 0.946353,
+                    'fluid ounce (US fl oz)': 0.0295735,
+                    'cup (US cup)': 0.236588,
+                }
+            },
+            Area: {
+                base: 'square meter',
+                units: {
+                    'square meter (m²)': 1,
+                    'square kilometer (km²)': 1000000,
+                    'square mile (mi²)': 2589988,
+                    'hectare (ha)': 10000,
+                    'acre': 4046.86,
+                    'square foot (ft²)': 0.092903,
+                    'square inch (in²)': 0.00064516,
+                }
+            },
+            Speed: {
+                base: 'meter per second',
+                units: {
+                    'meter per second (m/s)': 1,
+                    'kilometer per hour (km/h)': 0.277778, // 1/3.6
+                    'mile per hour (mph)': 0.44704,
+                    'foot per second (ft/s)': 0.3048,
+                    'knot (kn)': 0.514444,
+                    'speed of light (c)': 299792458,
+                }
+            },
+            DigitalStorage: {
+                base: 'byte',
+                units: {
+                    'byte (B)': 1,
+                    'kilobyte (KB)': 1024,
+                    'megabyte (MB)': 1024 * 1024, // 1,048,576
+                    'gigabyte (GB)': 1024 * 1024 * 1024, // 1,073,741,824
+                    'terabyte (TB)': 1024 * 1024 * 1024 * 1024, // 1,099,511,627,776
+                    'petabyte (PB)': 1024 * 1024 * 1024 * 1024 * 1024, // 1,125,899,906,842,624
+                }
+            },
+            Time: {
+                base: 'second',
+                units: {
+                    'second (s)': 1,
+                    'minute (min)': 60,
+                    'hour (h)': 3600,
+                    'day': 86400,
+                    'week': 604800,
+                    'year': 31536000, // Approximate based on 365 days
+                }
+            },
+            Temperature: {
+                base: 'celsius',
+                // Temperature needs a custom conversion function, not just a factor
+                // Storing units here for the dropdown population only.
+                units: {
+                    'Celsius (°C)': 1,
+                    'Fahrenheit (°F)': 1,
+                    'Kelvin (K)': 1,
+                }
+            }
+        };
+
+        const categorySelect = document.getElementById('category-select');
+        const fromUnitSelect = document.getElementById('from-unit-select');
+        const toUnitSelect = document.getElementById('to-unit-select');
+        const fromValueInput = document.getElementById('from-value');
+        const toValueInput = document.getElementById('to-value');
+        const errorMessage = document.getElementById('error-message');
+        const body = document.body;
+        const themeIcon = document.getElementById('theme-icon');
+        const copyBtn = document.getElementById('copy-btn');
+        const copyIcon = document.getElementById('copy-icon');
+
+        // --- Theme Management ---
+        const darkThemeIcon = `<path d="M21.75 14.75a.75.75 0 00-.75-.75H13a.75.75 0 00-.75.75v8.5a.75.75 0 00.75.75h8a.75.75 0 00.75-.75v-8.5zM12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.75 7.75a.75.75 0 01.53-.22l1.5-1.5a.75.75 0 111.06 1.06l-1.5 1.5a.75.75 0 01-1.06-1.06zM12 18a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V18a.75.75 0 01.75-.75zM4.97 4.97a.75.75 0 011.06 0l1.5 1.5a.75.75 0 11-1.06 1.06l-1.5-1.5a.75.75 0 010-1.06zM2.25 12a.75.75 0 01.75-.75h2.25a.75.75 0 010 1.5H3a.75.75 0 01-.75-.75zM17.69 17.69a.75.75 0 011.06 0l1.5 1.5a.75.75 0 11-1.06 1.06l-1.5-1.5a.75.75 0 010-1.06zM3 12a9 9 0 1018 0 9 9 0 00-18 0z"/>`;
+        const lightThemeIcon = `<path d="M9.599 3.32a.75.75 0 01.21-.067c.071-.008.143-.01.216-.008.067.001.137.005.204.012a.75.75 0 01.196.06c.063.03.125.068.182.112l1.5 1.125a.75.75 0 01-.636 1.25l-1.5-1.125a.75.75 0 01.077-.996c.05-.04.103-.075.16-.104zM12 18a6 6 0 100-12 6 6 0 000 12zM2.25 12a.75.75 0 01.75-.75h2.25a.75.75 0 010 1.5H3a.75.75 0 01-.75-.75zM18 12a.75.75 0 01.75-.75h2.25a.75.75 0 010 1.5H18a.75.75 0 01-.75-.75zM14.97 4.97a.75.75 0 010 1.06l-1.5 1.5a.75.75 0 11-1.06-1.06l1.5-1.5a.75.75 0 011.06 0zM7.03 17.03a.75.75 0 010 1.06l-1.5 1.5a.75.75 0 11-1.06-1.06l-1.5-1.5a.75.75 0 011.06 0zM14.97 17.03a.75.75 0 01-1.06 1.06l-1.5-1.5a.75.75 0 111.06-1.06l1.5 1.5zM7.03 6.03a.75.75 0 011.06 0l1.5 1.5a.75.75 0 11-1.06 1.06l-1.5-1.5a.75.75 0 010-1.06z"/>`;
+        const copyPath = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-2M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5h8m-1 7l-2 2m0 0l-2-2m2 2v6"></path>`;
+        const successPath = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />`;
+
+
+        function applyTheme(theme) {
+            body.setAttribute('data-theme', theme);
+            themeIcon.innerHTML = theme === 'dark' ? lightThemeIcon : darkThemeIcon;
+            localStorage.setItem('theme', theme);
+        }
+
+        function toggleTheme() {
+            const currentTheme = body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            applyTheme(currentTheme);
+        }
+
+        function loadTheme() {
+            // Check for saved theme preference, default to 'light'
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            applyTheme(savedTheme);
+        }
+
+        /**
+         * Copies the result to the clipboard and provides visual feedback.
+         */
+        function copyResult() {
+            const resultValue = toValueInput.value;
+
+            if (!resultValue || resultValue === 'Error') {
+                errorMessage.textContent = 'Nothing to copy.';
+                errorMessage.classList.remove('hidden');
+                setTimeout(() => errorMessage.classList.add('hidden'), 2000);
+                return;
+            }
+
+            // Fallback for document.execCommand('copy') which works reliably in iframes
+            try {
+                // Temporarily create a textarea element to select and copy the text
+                const tempTextArea = document.createElement('textarea');
+                tempTextArea.value = resultValue;
+                document.body.appendChild(tempTextArea);
+                tempTextArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(tempTextArea);
+
+                // Visual Feedback: Change icon to a checkmark
+                copyIcon.innerHTML = successPath;
+                copyBtn.classList.add('bg-secondary-accent', 'hover:bg-secondary-accent'); // Use secondary green for success feedback
+                copyBtn.classList.remove('bg-primary-accent', 'hover:bg-primary-hover');
+
+                setTimeout(() => {
+                    // Revert icon and button color after 1.5 seconds
+                    copyIcon.innerHTML = copyPath;
+                    copyBtn.classList.remove('bg-secondary-accent', 'hover:bg-secondary-accent');
+                    copyBtn.classList.add('bg-primary-accent', 'hover:bg-primary-hover');
+                }, 1500);
+
+            } catch (err) {
+                errorMessage.textContent = 'Copy failed. Browser may restrict clipboard access.';
+                errorMessage.classList.remove('hidden');
+                setTimeout(() => errorMessage.classList.add('hidden'), 3000);
+            }
+        }
+
+
+        /**
+         * Converts between different units of temperature using custom formulas.
+         */
+        function convertTemperature(value, fromUnit, toUnit) {
+            let celsius;
+            if (fromUnit === 'Celsius (°C)') {
+                celsius = value;
+            } else if (fromUnit === 'Fahrenheit (°F)') {
+                celsius = (value - 32) * (5 / 9);
+            } else if (fromUnit === 'Kelvin (K)') {
+                celsius = value - 273.15;
+            } else {
+                return NaN;
+            }
+
+            if (toUnit === 'Celsius (°C)') {
+                return celsius;
+            } else if (toUnit === 'Fahrenheit (°F)') {
+                return (celsius * (9 / 5)) + 32;
+            } else if (toUnit === 'Kelvin (K)') {
+                return celsius + 273.15;
+            }
+
+            return NaN;
+        }
+
+
+        /**
+         * Populates the unit dropdown menus based on the selected category.
+         */
+        function updateUnits() {
+            const category = categorySelect.value;
+            // The check below prevents the TypeError experienced previously
+            if (!category || !CONVERSION_FACTORS[category]) {
+                return;
+            }
+            
+            const units = CONVERSION_FACTORS[category].units;
+            const unitNames = Object.keys(units);
+
+            // Clear existing options
+            fromUnitSelect.innerHTML = '';
+            toUnitSelect.innerHTML = '';
+
+            // Populate both dropdowns with new options
+            unitNames.forEach(unit => {
+                const optionFrom = new Option(unit, unit);
+                const optionTo = new Option(unit, unit);
+                fromUnitSelect.add(optionFrom);
+                toUnitSelect.add(optionTo);
+            });
+
+            // Set initial default selections (kept from previous versions)
+            if (category === 'Length') {
+                fromUnitSelect.value = 'meter (m)';
+                toUnitSelect.value = 'foot (ft)';
+            } else if (category === 'Mass') {
+                fromUnitSelect.value = 'kilogram (kg)';
+                toUnitSelect.value = 'pound (lb)';
+            } else if (category === 'Volume') {
+                fromUnitSelect.value = 'liter (L)';
+                toUnitSelect.value = 'gallon (US gal)';
+            } else if (category === 'Area') {
+                fromUnitSelect.value = 'square meter (m²)';
+                toUnitSelect.value = 'square foot (ft²)';
+            } else if (category === 'Speed') {
+                fromUnitSelect.value = 'meter per second (m/s)';
+                toUnitSelect.value = 'mile per hour (mph)';
+            } else if (category === 'DigitalStorage') {
+                fromUnitSelect.value = 'gigabyte (GB)';
+                toUnitSelect.value = 'megabyte (MB)';
+            } else if (category === 'Time') {
+                fromUnitSelect.value = 'hour (h)';
+                toUnitSelect.value = 'minute (min)';
+            } else if (category === 'Temperature') {
+                fromUnitSelect.value = 'Celsius (°C)';
+                toUnitSelect.value = 'Fahrenheit (°F)';
+            }
+
+            // Perform an initial conversion
+            performConversion();
+        }
+
+        /**
+         * Performs the actual unit conversion based on user input and selected units.
+         */
+        function performConversion() {
+            errorMessage.classList.add('hidden');
+            const category = categorySelect.value;
+            const fromUnit = fromUnitSelect.value;
+            const toUnit = toUnitSelect.value;
+            const inputValue = parseFloat(fromValueInput.value);
+            let result;
+
+            if (isNaN(inputValue)) {
+                errorMessage.textContent = 'Please enter a valid numerical value.';
+                errorMessage.classList.remove('hidden');
+                toValueInput.value = '';
+                return;
+            }
+
+            // Check for negative values where physical quantities must be non-negative.
+            if (inputValue < 0 && category !== 'Temperature') {
+                 errorMessage.textContent = 'Only non-negative values are valid for this conversion.';
+                errorMessage.classList.remove('hidden');
+                toValueInput.value = '';
+                return;
+            }
+
+            // Handle Temperature separately due to non-linear formulas
+            if (category === 'Temperature') {
+                result = convertTemperature(inputValue, fromUnit, toUnit);
+            } else {
+                // Handle all other linear (fixed factor) conversions
+                const factors = CONVERSION_FACTORS[category].units;
+                const factorFrom = factors[fromUnit];
+                const factorTo = factors[toUnit];
+                
+                // Convert From Unit to Base Unit
+                const valueInBase = inputValue * factorFrom;
+                
+                // Convert Base Unit to To Unit
+                result = valueInBase / factorTo;
+            }
+
+            // Display the result
+            if (isNaN(result) || !isFinite(result)) {
+                 toValueInput.value = 'Error';
+            } else {
+                toValueInput.value = result.toFixed(10).replace(/\.?0+$/, ""); 
+            }
+        }
+        
+        /**
+         * Initializes the category dropdown with all available categories and sets up the initial view.
+         */
+        function initializeConverter() {
+            // 1. Populate Category Select from the data structure
+            const categories = Object.keys(CONVERSION_FACTORS);
+            categories.forEach(category => {
+                const option = new Option(category, category);
+                categorySelect.add(option);
+            });
+            
+            // 2. Then, populate the unit dropdowns based on the default selected category
+            updateUnits();
+            
+            // 3. Update the date display
+            updateDateDisplay(); 
+        }
+
+        /**
+         * Updates the date display in the header.
+         */
+        function updateDateDisplay() {
+            const dateElement = document.getElementById('current-date');
+            const now = new Date();
+            // Format: MM/DD/YY
+            const options = { month: '2-digit', day: '2-digit', year: '2-digit' };
+            dateElement.textContent = now.toLocaleDateString('en-US', options);
+        }
+
+        // Initialize the app when the page loads
+        window.onload = () => {
+            // Load theme first
+            loadTheme();
+            
+            // Give a tiny moment for all DOM elements to be ready, then initialize the converter logic and date
+            setTimeout(initializeConverter, 50);
+        };
+    </script>
+
+</body>
+</html>
